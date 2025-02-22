@@ -1,0 +1,16 @@
+---
+title: "assignment"
+author: "Gianluca"
+date: "2025-02-21"
+output: html_document
+---
+# Loading the package epiwrap 
+
+```{r}
+library(epiwraps)
+```
+# Showing installed packages
+```{r}
+sessionInfo()
+```
+
