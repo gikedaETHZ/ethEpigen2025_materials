@@ -1,0 +1,81 @@
+---
+title: "assignment"
+author: "Gianluca"
+date: "2025-02-28"
+output: html_document
+---
+# Packages required
+```{r}
+suppressPackageStartupMessages({
+  library(AnnotationHub)
+  library(GenomicRanges)
+  library(ensembldb)
+  library(epiwraps)
+  library(ggplot2)
+})
+```
+
+# Downloading M musculus files
+Finding M musculus EnsDb object, version 102, saving the ID and downloading the annotation file
+```{r}
+ah <- AnnotationHub()
+query_results <- query(ah, c("GRCm38","EnsDb"))
+query_results
+# version AH89211
+mmEns <- ah[["AH89211"]]
+```
+
+Downloading M musculus genome sequence in TwoBit format
+```{r}
+qr2 <- query(ah, c("GRCm38","dna_sm"))
+qr2
+# version AH88477
+mmGenome <- ah[["AH88477"]]
+```
+# Dowloading Drosophila melanogaster genome
+```{r}
+qr3 <- query(ah, c("BDGP6", "dna_sm"))
+qr3
+# version AH106160
+dmGenome <- ah[["AH106160"]]
+```
+# M musculus assignments
+## Counting gene IDs and symbols of PCGs
+```{r}
+PCGs <- genes(mmEns, filter=GeneBiotypeFilter("protein_coding"))
+head(PCGs)
+length(unique(PCGs$gene_id))
+# Gene ID count: 22287
+length(unique(PCGs$symbol))
+# Symbols count 21964
+```
+## Distribution of spliced lengths
+```{r}
+ex <- exonsBy(mmEns, by ="tx", filter = GeneBiotypeFilter("protein_coding"))
+ex_length <- sum(width(ex))
+head(ex_length)
+
+
+lengths_df <- data.frame(length = ex_length)
+ggplot(lengths_df, aes(x=length))+
+  geom_histogram(binwidth = 100, fill = "red")+
+  labs(title="Distribution of Spliced Length of PCGs")+
+  xlab("Spliced Length of PCGs")+
+  ylab("Count of Transcripts")
+```
+By looking at the sorted dataframe, there are few transcripts with a length of > 40000 nucleotides.
+```{r}
+count(lengths_df$length > 20000)
+# Only 36 transcripts are longer than 20000, so I want to plot everything thats under 20000
+
+lengths_red <- lengths_df[lengths_df$length<20000,]
+length_df_red <- data.frame(length = lengths_red)
+
+ggplot(length_df_red, aes(x=length))+
+  geom_histogram(binwidth = 100, fill = "red")+
+  labs(title="Distribution of Spliced Length of PCGs")+
+  xlab("Spliced Length of PCGs")+
+  ylab("Count of Transcripts")
+```
+
+
