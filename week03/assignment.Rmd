@@ -1,0 +1,89 @@
+---
+title: "ChIP-Seq Drosophila"
+author: "Gianluca"
+date: "2025-03-10"
+output: html_document
+---
+# Setup 
+
+```{r setup}
+setwd("C:/Users/gianl/Desktop/ETH/BiologyMsc/Spring Semester Material/BARGE/Assignments/week3")
+
+suppressPackageStartupMessages({
+  library(AnnotationHub)
+  library(Rsubread)
+  library(rtracklayer)
+  library(Biostrings)
+  library(Rfastp)
+  library(epiwraps)
+  library(GenomicRanges)
+  library(IRanges)
+})
+
+ah <- AnnotationHub()
+```
+
+The raw data was downloaded from the link of github and move to the working directory manually
+# Data preprocessing
+## QC and Trimming
+```{r QC and Trimming}
+dir.create("rfastp.trimmed")
+qc <- lapply(c(CTCF="raw/ENCFF127RRR.fastq.gz"), FUN = function(x){
+  Rfastp::rfastp(x, thread = 4, overrepresentationAnalysis = TRUE,
+                 outputFastq = file.path("rfastp.trimmed", gsub("\\.fastq\\.gz$","",basename(x))))
+})
+```
+
+# Mapping Reads
+## Indexing with Subread
+```{r Indexing with Subread}
+genome <- ah[["AH49674"]]
+dir.create("Dm_genome")
+export(import.2bit(genome), "Dm_genome/genome.fasta.gz", compress=TRUE)
+Rsubread::buildindex("Dm_genome/rsubread", reference = "Dm_genome/genome.fasta.gz")
+```
+
+## Alignment
+```{r Alignment}
+dir.create("aligned")
+align.stats <- Rsubread::align(index="Dm_genome/rsubread", type = "dna",
+                               readfile1 = "rfastp.trimmed/ENCFF127RRR_R1.fastq.gz",
+                               output_file = c("aligned/CTCF.bam"),
+                               nthreads = 6, sortReadsByCoordinates = TRUE)
+align.stats
+```
+
+# Peak Calling
+```{r Peak Calling}
+peaks <- callPeaks(bam = "aligned/CTCF.bam")
+```
+
+# Find Peaks matching to genes
+first I need to find the matching Ens file to the reference fasta used. There are no Ens file with a matching year to the reference genome used. THe closest one being from 2017 (AH53198)
+```{r Matching Peaks and Genes, eval=FALSE}
+q1 <- query(ah, c("BDGP6", "dna_sm"))
+q2 <- query(ah, c("BDGP6", "EnsDb"))
+date_added1 <- mcols(q1)[,c("rdatadateadded", "genome")]
+date_added2 <- mcols(q2)[,c("rdatadateadded","genome")]
+
+dmEns <- ah[["AH53198"]]
+genes <- genes(dmEns)
+
+overlap_pairs <- findOverlapPairs(peaks, genes, type = ("within"))
+
+head(overlap_pairs)
+```
+
+# Report
+## Mapping results
+From a total of 3816990 good quality reads, 3504769 of these reads mapped to the reference genome, resulting in 91.8% of successfully mapped reads.
+
+## Peaks Identified
+
+The callPeaks function reporter 2697 regions, 1172 with FDR <0.05
+
+## Plotting
+Take the first overlap from the list peak:2L:35577-35806   gene:2L:25402-65404:-
+```{r Plot}
+plotSignalTracks(c(CTCF="aligned/CTCF.bam"), region = "2L:35577-35806", extend = 5000)
+```
