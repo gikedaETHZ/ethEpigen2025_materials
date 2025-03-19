@@ -1,0 +1,79 @@
+---
+title: "ENCODE Assignment"
+author: "Gianluca"
+date: "2025-03-17"
+output: html_document
+---
+
+```{r setup}
+suppressPackageStartupMessages({
+  library(AnnotationHub)
+  library(rtracklayer)
+  library(GenomicRanges)
+  library(dplyr)
+})
+```
+# Downloading the data
+```{r, data}
+#p300 data
+download.file("https://www.encodeproject.org/files/ENCFF460EOA/@@download/ENCFF460EOA.bed.gz", "ENCFF460EOA.bed.gz")
+
+#H3K4me1 data
+download.file("https://www.encodeproject.org/files/ENCFF426IIV/@@download/ENCFF426IIV.bed.gz", "ENCFF426IIV.bed.gz")
+
+#H3K4me3 data
+download.file("https://www.encodeproject.org/files/ENCFF974BMC/@@download/ENCFF974BMC.bed.gz", "ENCFF974BMC.bed.gz")
+
+#H3K27me3 data
+download.file("https://www.encodeproject.org/files/ENCFF008XKX/@@download/ENCFF008XKX.bed.gz", "ENCFF008XKX.bed.gz")
+
+#H3K27ac data
+download.file("https://www.encodeproject.org/files/ENCFF274UIB/@@download/ENCFF274UIB.bed.gz", "ENCFF274UIB.bed.gz")
+
+#unzip files
+```
+
+# Extracting peaks
+```{r peaks}
+p300peaks <- rtracklayer::import("ENCFF460EOA.bed.gz", format="narrowPeak")
+
+H3K4me1peaks <- rtracklayer::import("ENCFF426IIV.bed.gz", format="narrowPeak")
+
+H3K4me3peaks <- rtracklayer::import("ENCFF974BMC.bed.gz", format="narrowPeak")
+
+H3K27me3peaks <- rtracklayer::import("ENCFF008XKX.bed.gz", format="narrowPeak")
+
+H3K27acpeaks <- rtracklayer::import("ENCFF274UIB.bed.gz",format="narrowPeak")
+
+head(p300peaks, 5)
+head(H3K4me1peaks, 5)
+head(H3K4me3peaks, 5)
+head(H3K27me3peaks, 5)
+head(H3K27acpeaks, 5)
+```
+```{r overlaps}
+p300count <- length(p300peaks)
+
+# Proportion to H3K4me1
+overlapH3K4me1 <- round((length(findOverlaps(p300peaks, H3K4me1peaks))/p300count)*100, 2)
+
+# Proportion to H3K4me3
+overlapH3K4me3 <- round((length(findOverlaps(p300peaks, H3K4me3peaks))/p300count)*100, 2)
+ 
+# Proportion to H3K27me3
+overlapH3K27me3 <- round((length(findOverlaps(p300peaks, H3K27me3peaks))/p300count)*100, 2)
+
+# Proportion to H3K27ac
+overlapH3K27ac <- round((length(findOverlaps(p300peaks, H3K27acpeaks))/p300count)*100, 2)
+
+overlapH3K4me1
+overlapH3K4me3
+overlapH3K27me3
+overlapH3K27ac
+```
+
+# Report
+Proportion of overlapping p300 peaks with H3K4me1 is 15.81%
+Proportion of overlapping p300 peaks with H3K4me3 is 40.72%
+Proportion of overlapping p300 peaks with H3K27me3 is 0.32%
+Proportion of overlapping p300 peaks with H3K27ac is 58.39%
