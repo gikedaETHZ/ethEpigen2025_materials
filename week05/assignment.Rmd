@@ -1,0 +1,69 @@
+---
+title: "Cell Differentiation"
+author: "Gianluca"
+date: "2025-03-21"
+output: html_document
+---
+
+```{r setup}
+suppressPackageStartupMessages({
+  library(GenomicRanges)
+  library(rtracklayer)
+})
+
+setwd("C:/Users/gianl/Desktop/ETH/BiologyMsc/Spring Semester Material/BARGE/Assignments/week5")
+```
+
+# Differentiated Cells
+Since we are using only H3K4me3 and H3K27me3 regions I will consider only TSS bivalent domains, and not also enhancers which are marked by H3K4me1 and H3K27me3 histone modifications.
+```{r download}
+# Mouse Embryonic fibroblast H3K27me3
+download.file("https://www.encodeproject.org/files/ENCFF008XKX/@@download/ENCFF008XKX.bed.gz", "ENCFF008XKX.bed.gz")
+
+# Mouse Embryonic fibroblast H3K4me3
+download.file("https://www.encodeproject.org/files/ENCFF357JNZ/@@download/ENCFF357JNZ.bed.gz", "ENCFF357JNZ.bed.gz")
+```
+
+# Extracting peaks from bed files
+question how can I use lapply in this case? I should rename all bed files and include them in a folder that I can refer to using peakfiles <- list.files("peaks", full.names = TRUE) to create the list for lapply?
+
+```{r peaks}
+#ES H3K4me3
+peaks1ES <- rtracklayer::import("ENCFF974BMC.bed.gz", format="narrowPeak")
+
+# ES H3K27me3
+peaks2ES <- rtracklayer::import("ENCFF274UIB.bed.gz",format="narrowPeak")
+
+# Fib H3K4me3
+peaks1Fib <- rtracklayer::import( "ENCFF357JNZ.bed.gz", format="narrowPeak" )
+
+# Fib H3K27me3
+peaks2Fib <- rtracklayer::import("ENCFF008XKX.bed.gz", format="narrowPeak")
+```
+
+# Find bivalent domains (BD)
+The idea is to find regions in ES cells where both markers overlap and save the overall genetic locus in a list that can then be used again to identify new overlapping regions with the same markers on Fibroblasts.
+```{r bivalent domains}
+overlaps_ES <- findOverlapPairs(peaks1ES, peaks2ES)
+all_ranges <- c(first(overlaps_ES), second(overlaps_ES))
+ESBD_TSS <- reduce(all_ranges)
+
+FibOverlaplist <- findOverlapPairs(peaks1Fib, peaks2Fib)
+all_ranges2 <- c(first(FibOverlaplist), second(FibOverlaplist))
+FibBD_TSS <- reduce(all_ranges2)
+```
+
+# Amount of overlapping BDs in differentiated cells
+```{r}
+overlapping_BD <- sum(overlapsAny(ESBD_TSS, FibBD_TSS))
+overlapping_H3K4me3 <- sum(overlapsAny(peaks1Fib, ESBD_TSS))
+overlapping_H3K27me3 <- sum(overlapsAny(peaks2Fib, ESBD_TSS))
+
+overlapping_BD
+overlapping_H3K4me3
+overlapping_H3K27me3
+```
+
+# Report
+
+Mouse embryonic stem cell bivalent domains overlap with H3K4me3&H3K27me3 domains in only 44 cases. In contrast, ES bivalent domains overlapping only H3K4me3 are 9395, while those overlapping only H3K27me3 are 45.
