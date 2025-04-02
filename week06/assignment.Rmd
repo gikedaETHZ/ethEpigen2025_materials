@@ -1,0 +1,81 @@
+---
+title: "TF motif assignment"
+author: "Gianluca"
+date: "2025-03-29"
+output: html_document
+---
+
+```{r setup}
+BiocManager::install("BSgenome.Hsapiens.UCSC.hg38")
+
+suppressPackageStartupMessages({
+  library(AnnotationHub)
+  library(GenomicRanges)
+  library(ggplot2)
+  #library(memes) # for the meme-based methods -- COMMENT OUT when using alternatives if wanted download MEME suite
+  library(motifmatchr) # for scanning sequences for matches of given motifs
+  library(Biostrings) # for handling sequences, for conversion and extraction of nt sequences
+  library(MotifDb) # database of motifs
+  library(TFBSTools) # for handling some motif formats
+  library(universalmotif) # for converting motifs to various formats, also allows you to determine what kind of file they are
+  library(PWMEnrich) # for R-based motif enrichment analysis
+  library(BSgenome.Hsapiens.UCSC.hg38)
+})
+
+setwd("C:/Users/gianl/Desktop/ETH/BiologyMsc/Spring Semester Material/BARGE/Assignments/week6")
+```
+
+# Data & Genome
+
+Download ChIP-Seq data for MYC from Homo sapiens endothelial cell of umbilical vein newborn (ENCODE)
+
+```{r data}
+download.file("https://www.encodeproject.org/files/ENCFF459QFK/@@download/ENCFF459QFK.bed.gz", "ENCFF459QFK.bed.gz")
+peaks <- rtracklayer::import("ENCFF459QFK.bed.gz", format = "NarrowPeak")
+seqlevelsStyle <-"Ensembl"
+peaks_chr1 <- peaks[seqnames(peaks)=="1"]
+```
+
+Select human genome and get the sequence file
+
+```{r}
+ah <- AnnotationHub()
+q <- AnnotationHub::query(ah, c("Homo Sapiens", "2bit"))
+
+```
+
+# Identify Motifs
+
+Use exsiting motifs in the database
+```{r motifs}
+motifs <- query(MotifDb, "MYC")
+names(motifs) # select one
+motif <- motifs[["Hsapiens-HOCOMOCOv10-MYC_HUMAN.H10MO.A"]]
+view_motifs(motifs[1:2])
+```
+# Motifs and Peaks
+```{r}
+conv_motif <- convert_motifs(motif, class = "TFBSTools-PWMatrix")
+
+
+m_index <- motifmatchr::matchMotifs(conv_motif, subject=peaks, genome = "BSgenome.Hsapiens.UCSC.hg38",
+                                out="positions")
+
+
+
+m_index <- m_index[[1]] # we scanned for just one motif, so we get the results for that motif
+head(m_index)
+
+# Percentage of peaks with motif
+peak_perc <- sum(overlapsAny(peaks, m_index))/length(peaks)*100
+
+
+# Percentage of motifs in genome bound by factor
+motif_perc <- sum(overlapsAny(peaks, m_index))/length(m_index)*100
+```
+
+# Report
+From a total of 5285 peaks, 590 (11.16%) present a motif.
+
+From a total of 718 instances for that motif in the genome, 590 (82.17%) were bound by the factor
+
