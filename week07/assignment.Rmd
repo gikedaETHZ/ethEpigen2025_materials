@@ -1,0 +1,86 @@
+---
+title: "ATAC"
+author: "Gianluca"
+date: "2025-04-09"
+output: html_document
+---
+#Packages and Genome Ann
+```{r setup}
+suppressPackageStartupMessages({
+  library(epiwraps)
+  library(AnnotationHub)
+  library(MotifDb)
+  #library(memes)
+  library(universalmotif)
+  library(ensembldb)
+  library(ggplot2)
+})
+
+setwd("C:/Users/gianl/Desktop/ETH/BiologyMsc/Spring Semester Material/BARGE/Assignments/week7")
+
+ah <- AnnotationHub(localHub=TRUE)
+ensdb <- ah[["AH89211"]] # mouse ensembldb object
+```
+
+# Mouse Chr19 ATAC
+```{r data}
+download.file("https://ethz-ins.org/content/w7/atac.chr19.bam", "atac.chr19.bam", mode="wb")
+download.file("https://ethz-ins.org/content/w7/atac.chr19.bam.bai", "atac.chr19.bam.bai", mode="wb")
+```
+
+# Creating ATAC Tracks
+```{r tracks}
+bam <- "atac.chr19.bam"
+
+# NF inserts
+epiwraps::bam2bw(bam, output_bw = "NF_cuts.bw", paired=TRUE, binWidth=1L, type="ends", minFragLength=30, 
+       maxFragLength=120, trim=4L, extend=3L, forceSeqlevelsStyle = "Ensembl")
+
+# Mono-nucleosome fragments center
+bam2bw(bam, output_bw = "mono_centers.bw", paired=TRUE, binWidth=5L, minFragLength=140, trim=4L,
+       maxFragLength=220, type="center", extend=10L, forceSeqlevelsStyle = "Ensembl")
+```
+# Identifying Motifs MAZ and FOXD3
+```{r motifs}
+# get KLF4 motif
+motif1 <- MotifDb::query(MotifDb, c("MAZ","Mus"))[[1]]
+conv_motif1 <- convert_motifs(motif1, class="TFBSTools-PFMatrix")
+
+# get FOXD3 motif
+motif2 <- MotifDb::query(MotifDb, c("FOXD3", "Mus"))[[1]]
+conv_motif2 <- convert_motifs(motif2, class = "TFBSTools-PFMatrix")
+
+genome <- ah[["AH68356"]]
+# get the sequence for chr19:
+chr19 <- import(genome)["19"]
+
+# find motif matches across chr19
+moi1 <- motifmatchr::matchMotifs(conv_motif1, chr19, out="positions", p.cutoff=1e-5)[[1]]
+
+moi2 <- motifmatchr::matchMotifs(conv_motif2, chr19, out="positions", p.cutoff=1e-5)[[1]]
+
+# convert to GRanges
+moi1 <- as(setNames(moi1,names(chr19)), "GRanges")
+moi2 <- as(setNames(moi2,names(chr19)), "GRanges")
+```
+
+# Heatmap Plot MAZ
+```{r, fig.width=8, fig.height=4}
+# we prepare the list of tracks
+tracks <- list.files(pattern="bw$")
+names(tracks) <- gsub("\\.bw","",basename(tracks))
+
+# extract signals around the motif occurences
+# we zoom in to 300bp around the motif centers, in windows of 5bp
+sm <- signal2Matrix(tracks, moi1, w=5, extend=300)
+
+# plot the signals:
+plotEnrichedHeatmaps(sm, trim=0.95, multiScale = TRUE, axis_name = "0")
+```
+
+# Heatmap Plot FOXD3
+```{r, fig.width=8, fig.height=4}
+sm2 <- signal2Matrix(tracks, moi2, w=5, extend=300)
+
+plotEnrichedHeatmaps(sm2, trim = 0.95, multiScale = TRUE, axis_name = "0")
+```
