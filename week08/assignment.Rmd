@@ -1,0 +1,113 @@
+---
+title: "Differential Analysis"
+author: "Gianluca"
+date: "2025-04-15"
+output: html_document
+---
+
+```{r setup}
+suppressPackageStartupMessages({
+  library(epiwraps)
+  library(AnnotationHub)
+  library(motifmatchr)
+  library(MotifDb)
+  library(universalmotif)
+  library(SummarizedExperiment)
+  library(sechm)
+  library(BiocParallel)
+  library(chromVAR)
+  library(limma)
+  library(ggplot2)
+})
+
+setwd("C:/Users/gianl/Desktop/ETH/BiologyMsc/Spring Semester Material/BARGE/Assignments/week8")
+
+register(SerialParam())
+```
+# Download file, genome and elaborate SE 
+```{r data}
+download.file("https://ethz-ins.org/content/mouse_mm38_hippocampus.peakCounts.SE.rds","mouse_mm38_hippocampus.peakCounts.SE.rds", mode = "wb")
+
+se <- readRDS("mouse_mm38_hippocampus.peakCounts.SE.rds")
+
+row.names(se) <- as.character(granges(se))
+colData(se)$condition <- gsub("_.+", "", colnames(se))
+colData(se)$sex <- gsub(".*_(male|female)_.*","\\1", colnames(se))
+ 
+#consider only chr2
+ah <- AnnotationHub()
+genome <- ah[["AH68356"]]
+genome_seqs <- import(genome)
+```
+# Get motifs¨
+```{r}
+motif_collec <- MotifDb::query(MotifDb, c("HOCOMOCOv10","Mmusculus"))
+motifs <- do.call(TFBSTools::PWMatrixList, setNames(
+  universalmotif::convert_motifs(motif_collec, class = "TFBSTools-PWMatrix"),
+  mcols(motif_collec)$geneSymbol))
+
+motifs
+```
+
+# Add GC bias
+```{r}
+se <- chromVAR::addGCBias(se, genome=genome_seqs)
+# Check to see if the distribution is more or less normal
+rowData(se)
+hist(rowData(se)$bias)
+```
+# Differential Analysis
+```{r diff analysis condition}
+# Find which motifs match the peaks from the experiment
+m_index <- motifmatchr::matchMotifs(motifs, subject=se, genome=genome_seqs)
+head(assay(m_index))
+
+# Generate background for comparison
+set.seed(1234)
+bg <- chromVAR::getBackgroundPeaks(se, niterations=500)
+# compute per-sample deviation from background
+dev <- chromVAR::computeDeviations(object = se, annotations = m_index, background_peaks = bg)
+# See if baseline is control
+dev$condition
+dev$condition <- factor(dev$condition)
+dev$condition <- relevel(dev$condition, "Control")
+
+
+# Generate linear model for condition
+mm <- model.matrix(~condition, data=as.data.frame(colData(dev)))
+fit <- limma::eBayes(limma::lmFit(object = assays(dev)$z, design = mm))
+res <- as.data.frame(limma::topTable(fit, coef="conditionFSS", number = Inf))
+head(res)
+
+# volcano
+ggplot(res, aes(logFC, -log10(adj.P.Val), label = ID)) + geom_text()
+
+universalmotif::view_motifs((motifs[c("ANDR", "GCR", "PRGR")]))
+
+# heatmap
+metadata(dev)$anno_colors <- list(condition=c(Control="lightgrey", FSS="darkred"))
+sechm::sechm(dev, features = head(res$ID), assayName="z", top_annotation = c("condition", "sex"))
+```
+
+```{r diff analysis sex}
+# Set sex as a factor
+dev$sex <- factor(dev$sex)
+dev$sex <- relevel(dev$sex, "female")
+
+# generate linear model for sex effects
+mm2 <- model.matrix(~sex, data = as.data.frame(colData(dev)))
+fit2 <- limma::eBayes(limma::lmFit(object = assays(dev)$z, design = mm2))
+res2 <- as.data.frame(limma::topTable(fit2, coef = "sexmale", number = Inf))
+
+ggplot(res2, aes(logFC,-log10(adj.P.Val), label = ID)) + geom_text()
+
+universalmotif::view_motifs((motifs[c("TYY1", "TEAD1", "RUNX3")]))
+
+# heatmap
+sechm::sechm(dev, features = head(res2$ID), assayName = "z", top_annotation = c("sex", "condition"))
+```
+
+# Comments
+As expected, differential analysis that takes into consideration only the condition shows an increase in motifs related to stress, such as GCR in individuals exposed to FSS (stress condition). We also see an increase in progesterone and androgen receptor motif binding, with progesterone being the least increased of the three, probably because its motfi sequence is more specific compared to the other two. The highest between the three of the motif is the androgen receptor, this could be given by the fact that its sequence presents very high specificity for G and C, which forms stronger intermolecular interactions with the TF.
+If we instead do a differential expression analysis only based on sex, we see that the most different ones are not dependent on the condition, hence these are TFs related to sex-specific biological processes, more precisely to female specific processes.
+
