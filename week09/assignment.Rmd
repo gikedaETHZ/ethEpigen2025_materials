@@ -1,0 +1,25 @@
+---
+title: "Project Proposal"
+author: "Gianluca"
+date: "2025-05-07"
+output: html_document
+---
+Group members: Carla Ebner and Gianluca Ikeda Ferretti
+
+We have two possible ideas for the project and we are not sure which one is more feasible for a group of two.
+
+# First Idea
+
+1. Based on "Antipsychotic-induced epigenomic reorganization in frontal cortex of individuals with schizophrenia", Zhu et al, 2024.  (https://pubmed.ncbi.nlm.nih.gov/38648100/). In this paper they analyse changes in active enhancers (H3K27ac) and promoters (H3K4me3) between schizophrenic individuals either treated or not treated with antipsychotic drugs. They also integrate RNAseq data to investigate also differently expressed genes. 
+
+2. The processed ChIP-seq data is available by the following link https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE174407. It contains all patients either H3K27ac and H3K4me3 ChIP-seq files, which are either treated or untreated in BigWig format.
+
+3. We are thinking on partly reproducing some elements of the analysis carried out by them such as characterising the differentially active enhancers and promoters in either treated or untreated patients (Fig 2A/B/C), linking promoters and enhancers to nearby genes and looking for genetic pathways related to these active regulatory regions in treated and untreated patients and looking for enrichments between treated and untreated patients.
+
+# Second Idea
+
+1. This second idea is based on bee social castes and what epigenetic elements in brain cells determine them as reported by "Chromatin accessibility-based characterisation of brain gene regulatory networks in three distinct honey bee polyphenisms", Lowe et al, 2022. https://academic.oup.com/nar/article/50/20/11550/6795889?login=true.
+
+2. In this paper they generated a genome-wide accessibility profile (ATAC-seq), histone modifications (H3K27ac and H3K4me3) profile and RNAseq dataset for all three adult phenotypes. Accessible via https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE206995, where ATAC-seq and ChIP-seq files are in narrowpeak format.
+
+3. We think that based on the methods seen in the lectures we would be able to reproduce most of the analysis, besides the TF-TF network part.
