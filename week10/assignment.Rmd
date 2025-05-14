@@ -1,0 +1,97 @@
+---
+title: "Clustering and Enrichment Analysis"
+author: "Gianluca"
+date: "2025-05-14"
+output: html_document
+---
+
+```{r setup}
+suppressPackageStartupMessages({
+  library(GenomicRanges)
+  library(epiwraps)
+  library(ggplot2)
+  library(rGREAT) 
+})
+
+setwd("C:/Users/gianl/Desktop/ETH/BiologyMsc/Spring Semester Material/BARGE/Assignments/week10")
+download.file("https://ethz-ins.org/content/w10.assignment.zip", "w10.assignment.zip")
+unzip("w10.assignment.zip")
+```
+
+# Data Processing and First Visualisation
+
+```{r visualisation}
+tracks <- list.files(pattern = "bw$")
+peaks <- list.files(pattern="bed$")
+# we first import the peaks
+peaks <- lapply(peaks, rtracklayer::import.bed)
+# we'll focus on the high-quality peaks
+peaks <- lapply(peaks, FUN=function(x) x[x$score>800])
+# we get the union of non-redundant regions
+regions <- reduce(unlist(GRangesList(peaks)))
+
+signal_matrix <- signal2Matrix(tracks, regions, extend = 2000)
+plotEnrichedHeatmaps(signal_matrix)
+```
+
+# Clustering
+```{r find K}
+set.seed(123) # ensures reproducibility
+
+cl_test <- clusterSignalMatrices(signal_matrix, k=2:10, scaleRows = TRUE)
+ggplot(cl_test$varExplained, aes(k, varExplained)) + geom_line()
+
+# with 4 clusters we can explain already more than 80% of variance
+```
+
+```{r clustering}
+cl <- clusterSignalMatrices(signal_matrix, k=4, scaleRows = TRUE)
+table(cl)
+head(cl)
+length(cl)
+length(regions)
+rowData(signal_matrix)$cluster <- cl
+
+mycolors <- c("1"="red", "2"="blue", "3"="darkgreen", "4"="pink")
+
+plotEnrichedHeatmaps(signal_matrix, mean_color=mycolors, row_split=rowData(signal_matrix)$cluster, 
+                     colors=c("white","darkred"), scale_rows = "global")
+
+d <- meltSignals(signal_matrix, splitBy = cl)
+ggplot(d, aes(position, mean, colour = sample)) + geom_line(size=1.2) + facet_wrap(~split)
+```
+# GO Enrichment Analysis
+```{r}
+# split clusters to use as groups for GO enrichment analysis
+
+split_regions <- split(rowRanges(signal_matrix), rowData(signal_matrix)$cluster)
+
+res <- great(split_regions[["1"]], gene_sets="GO:BP", tss_source="mm10", 
+             background=regions, cores=2)
+
+
+res3 <- great(split_regions[["3"]], gene_sets = "GO:BP", tss_source = "mm10", background = regions, cores = 4)
+
+res4 <- great(split_regions[["4"]], gene_sets = "GO:BP", tss_source = "mm10", background = regions, cores = 2)
+
+
+# enrichment analysis
+bp <- getEnrichmentTables(res)
+bp3 <- getEnrichmentTable(res3)
+bp4 <- getEnrichmentTable(res4)
+head(bp)
+head(bp3)
+head(bp4)
+```
+
+```{r, fig.width=9, fig.height=6}
+
+ggplot(head(bp,15), aes(fold_enrichment, reorder(description, p_adjust), 
+                        size=observed_region_hits, color=-log10(p_adjust))) + 
+  geom_point() + scale_color_viridis_c()
+```
+
+# Comment
+
+Either three of the TFs can occur mostly by itself in a genomic regions, as we see for cluster 1-3, with very little signal from either one of the other TFs. Nonetheless, Creb1 and Creb3L1 can instead co-occur in a genomic region, which could be the result of competition for the same locus or cooperation.
+The GO enrichment analysis shows us that for cluster 1, characterised by high Creb1 signal, is mostly enirched for ion exchange processes. Cluster 3 that has high signals of Creb3L1, is enriched for biological processes that seem related to cell differentiation. On the other hand cluster 4 shows a high signal for both Creb1 and Creb3L1. Some biological processes relate to one of the two TF, for example "synaptic signalling" to some extent can be related to ion exchange processes, most specifically to potassium exchange which is indicate in the GO enrichment of cluster 1. The most enriched biological process in cluster 4 is instead "actomyosin structure organisation", which to me seems something unique to this cluster and hence might be a result of cooperation between Creb1 and Creb3L1.
