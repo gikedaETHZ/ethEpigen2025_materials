@@ -1,0 +1,102 @@
+---
+title: "DNA Methylation"
+author: "Gianluca"
+date: "2025-05-17"
+output: html_document
+---
+
+```{r setup}
+setwd("C:/Users/gianl/Desktop/ETH/BiologyMsc/Spring Semester Material/BARGE/Assignments/week11")
+
+suppressPackageStartupMessages({
+  library(epiwraps)
+  library(ggplot2)
+  library(ensembldb)
+  library(edgeR)
+  library(rtracklayer)
+  library(BiocParallel)
+  library(bsseq)
+  library(DMRcate)
+  library(GenomicRanges)
+  library(rGREAT)
+})
+unzip("w11_practical.zip")
+```
+
+# Genes in Top 5 Differentially Methylated Regions heatmap
+
+```{r}
+# Getting BSseq data
+bs <- readRDS("ESC_astrocytes_BSseq.rds")
+# remove CpGs that have 0 coverage in some samples:
+bs <- bs[rowSums(assay(bs,"Cov")>0)==ncol(bs),]
+
+design <- model.matrix(~celltype, data=pData(bs)) 
+# adapt the design for methylation data:
+methdesign <- modelMatrixMeth(design)
+
+bs <- BSmooth(bs, BPPARAM=MulticoreParam(4, progress=TRUE))
+
+# Find genes in top 5 DMR
+dmr <- readRDS("dmr.rds")
+chr1_regions <- dmr[seqnames(dmr)=="chr1"]
+ordered_chr1 <- chr1_regions[order(mcols(chr1_regions)$meandiff, decreasing = TRUE)]
+top5 <- ordered_chr1[1:5]
+# We have a total of 6 genes in the top 5 DMR regions of chr1 where the most enriched region shows no overlapping genes
+# The genes symbols are MAP7D1, ELF3, RP11-465N4.4, RP11-544M22.13, TSTD1, SEMA6C)
+
+# Genes in chr1
+genes <- readRDS("hg19_chr1_genes.rds")
+
+# Check if these genes are present also in the hg19_chr1 list
+genes_to_check <- c("MAP7D1", "ELF3", "RP11-465N4.4", "RP11-544M22.13", "TSTD1", "SEMA6C")
+genes_to_check %in% genes$symbol
+
+
+# "RP11-465N4.4" and "RP11-544M22.13" are not shared so I remove them from the list
+
+# genes in top 5 regions
+topgenes <- genes[c("MAP7D1", "ELF3", "TSTD1", "SEMA6C")]
+
+# Get methylation for the genes
+metGen <- bsseq::getMeth(bs, regions = topgenes, what = "perRegion")
+colnames(metGen) <- colnames(bs)
+rownames(metGen) <- topgenes$symbol
+
+# heatmap plot
+pheatmap(metGen, name="gene\nmethylation")
+```
+# Enrichment Analysis of Significant DMRs
+```{r}
+# per default great compares to the entire genome if no background is specified
+
+res <- great(dmr, gene_sets = "GO:BP", tss_source = "hg19", cores = 2)
+
+bp <- getEnrichmentTables(res)
+head(bp)
+
+# Plotting 
+ggplot(head(bp,15), aes(fold_enrichment, reorder(description, p_adjust),
+                        size=observed_region_hits, color= -log10(p_adjust)))+
+  geom_point()+scale_color_viridis_b()
+```
+# Comment of enrichment analysis
+
+With this enrichment analysis the genes present at differentially methylated regions on chromosome 1 are compared to all the genes present in the entire genome. Each gene is grouped into the correspondent biological process based on Gene Onthology terms.
+The results from the enrichment analysis is not entirely coherent with the expectations of compairing astrocytes to embryonic stem cells. The assumption would be that biological processes related to stereotypical astrocyte functions would be enriched, such as neuromodulator release or neuronal maintenance. The reason for this might be given by the fact that genes and functions are not uniformally distributed among chromosomes. Hence, there might be biases for certain functions that are more represented at the specific chromosome then the whole genome.
+
+If we instead compare some selected differentially methylated regions only to chromosome 1 as I did below we see how the biological processes enriched are quite different and seem more reasonable to what astrocytes carry out in the brain. For example many are associated to regulating immune response, which is a very important function of astrocytes.
+ 
+```{r}
+
+sign_dmrs <- dmr[dmr$HMFDR <= 10^(-12.5) & (dmr$meandiff >= 2.5 | dmr$meandiff <= -2.5),]
+res2 <- great(sign_dmrs, background= dmr, gene_sets = "GO:BP", tss_source = "hg19", cores = 2)
+
+bp2 <- getEnrichmentTables(res2)
+head(bp2)
+
+# Plotting 
+ggplot(head(bp2,15), aes(fold_enrichment, reorder(description, p_adjust),
+                        size=observed_region_hits, color= -log10(p_adjust)))+
+  geom_point()+scale_color_viridis_b()
+```
