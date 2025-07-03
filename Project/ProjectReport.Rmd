@@ -1,0 +1,1222 @@
+---
+title: "Project Report"
+author: "Gianluca Ikeda Ferretti & Carla Ebner"
+date: "2025-07-01"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+---
+
+# Introduction
+
+In this project we aimed to reproduce some of the analyses from the publication “Antipsychotic-induced epigenomic reorganization in frontal cortex of individuals with schizophrenia”, Zhu et al. 2024 [1]. Although schizophrenia has long been considered a genetic disorder with high heritability [2], recent research suggests that this assumption may not be entirely accurate. Previous genome-wide association studies have even shown a quite low number of genetic regions associated with schizophrenia risk [3]. With twin studies, evidence was found for the high contribution of environmental factors to the development of schizophrenia [4]. 
+Given the growing evidence for a substantial role of environmental influences, attention has increasingly shifted towards epigenetic mechanisms that may serve as mediators between environmental exposures and gene regulation in the brain. Gene expression is regulated by DNA accessibility within chromatin, which is modulated by epigenetic mechanisms such as DNA methylation and histone modifications. These modifications induce stable yet dynamic changes in gene expression without altering the DNA sequence and remain responsive throughout brain development and aging [5]. Based on this concept there is the assumption that epigenetic processes, mediate the effects of environmental factors on central nervous system gene activity and therefore contribute to the pathophysiology of mental illnesses, such as schizophrenia. Supporting this hypothesis, prior studies have identified differences in chromatin structure and accessibility between tissue samples from individuals with schizophrenia and healthy controls. Since previous research was mainly focused on alterations in DNA methylation, the focus of the paper we wanted to partially reproduce, was on changes in histone modifications.
+In this context, the publication “Antipsychotic-induced epigenomic reorganization in frontal cortex of individuals with schizophrenia” by Zhu et al. provides important insights into the role of histone modifications in schizophrenia. The persistent plasticity of histone modifications into adulthood allows environmental influences, including antipsychotic treatments, to alter access to genes and regulatory elements. To investigate these processes, Zhu et al. performed ChIP-seq analyses targeting two specific histone modifications: H3K27ac (histone H3 acetylation of lysine 27), marking active enhancers, and H3K4me3 (histone H3 trimethylation of lysine 4), marking active promoters. Both enhancers and promoters are known to be involved in the regulation of genes implicated in psychiatric conditions. For comparative analysis, frontal cortex samples were obtained from healthy controls, antipsychotic-free (AF) patients, and antipsychotic-treated (AT) patients.
+In a differential analysis to study alterations in histone modification patterns and gene activity between individuals with schizophrenia and healthy controls, thousands of differential enhancers, promoters, and differentially expressed genes (DEGs) were identified in both neuronal and non-neuronal cells. (2A/2B)
+To study epigenomic profiles in schizophrenia patients and controls, clusters of regulatory regions were identified that were significantly enriched for schizophrenia-associated differential histone marks and gene expression. These clusters were also functionally enriched for neuronal and synaptic genes, supporting the idea that schizophrenia affects specific, functionally coherent regions of the epigenome. (3A/B).
+After identifying AF-specific DEGs (genes dysregulated in antipsychotic-free schizophrenia but unchanged in treated patients) and performing an enrichment analysis, Zhu et al. could show that antipsychotic-free schizophrenia patients have distinct transcriptional and regulatory signatures enriched in synaptic signalling and autophagy pathways, which appear normalized in treated individuals, highlighting potential therapeutic mechanisms of antipsychotic drugs. (5G/H)
+We now wanted to reproduce these analyses and potentially compare our results to the findings in the original paper. Will our analyses result in the same outcome? How can we interpret our findings?
+
+
+# Discussion
+
+The first step in this analysis was to generate Summarised Experiment (SE) files starting from the processed BigWig files made accessible by the authors via Gene Expression Omnibus (GEO) under accession number GSE174407 (Script 1). We initially attempted to extract the signal by applying the function signal2Matrix from the epigenomic analysis package epiwraps, focusing only on promoter and enhancer regions annotated in ENCODE. This approach proved to be too demanding for the hardware we had available. When extracting only promoter signals from the dataset, besides requiring around 4 hours to complete, the resulting SE was 16Gb. This made it impossible to run any function on this file in R. Moreover, since the number of enhancers is much higher than promoters, the same code would run for much longer and required too much memory, leading to the automatic interruption of the running chunk. Hence, we decided to program-matically import from each BigWig file only the regions present in the selected BED file obtained with the AnnotationHub package and saved the mean signal for each region in a matrix. Additionally, we separately extracted from each file its metadata and together with the count matrix generated the final SE file. For both promoters and enhancers, we queried for annotations from the latest human reference genome (GRCh38), the same used by the authors to map their ChIP-seq data. For enhancers, the ENCODE Registry of candidate cis-Regulatory Elements (cCREs) classifies enhancer-like signatures in two subsets, proximal (pELS) and (dELS) [6]. We opted for pELS only because it contained 171292 entries, compared to the 755243 present in the distal subset, making analysis much less computationally demanding. In the publication, the authors only consider active enhancers those regions marked by H3K27ac that did not overlap with a promoter. Therefore, we checked whether the promoter and enhancer regions that we considered overlapped, but no match was identified. One final important aspect that we considered in both cases was the presence of all-zero and/or missing values rows. Since we are creating a matrix with rows corresponding to all genomic intervals present in the BED file, it is reasonable to think that some might not be present whatsoever in the data, and hence those rows were removed.
+With the manageable SE files, we proceeded to associate genes with the identified active promoters and enhancers. Promoters were linked to a gene when their genomic interval overlapped with the 500 bp region upstream a gene’s transcription start site, since proximal promoter regions are found 500 bps upstream the TSS [7]. A similar approach of overlapping was adopted in the original publication as well. An analogous procedure by overlapping genomic intervals was carried out to annotate enhancers with genes, but since pELS are described to be within 2kb of distance to a TSS we increased the enhancer regions width accordingly. If we were to use instead dELS the increase in width of the regions would be much greater, resulting in many more overlapping genes to each enhancer. In the original publication, annotation of enhancers was instead achieved by implementing published Hi-C data, and if no information was present then the enhancers were associated with their nearest genes.
+With the annotated SE files, we performed differential analysis to reproduce the results exhibited in figure 2. The limma package seen during lectures was applied to carry out the differential analysis used to generate volcano plots comparable to those in Figure 2C (Figure 1), while the original publication applied the R package DiffBind.
+
+![*Figure 1: Comparison between volcano plots to visualise differentially enriched regulatory regions in schizophrenia samples.*](C:/Users/gianl/Desktop/ETH/BiologyMsc/Spring Semester Material/BARGE/Project/data/volcano_plot_comp.png)
+
+\
+Multiple aspects of our results do not correspond to those of the original publication. First and foremost, the total number of regions identified with our approach appears to be much greater. Secondly, adjusted p values are extremely low, even compared to the already low ones obtained in the original publication. Finally, when we matched the candidate genes associated with our differentially enriched regulatory elements with those present in a list schizophrenia related genes provided by the authors, none of those matched by the original publication corresponded to the ones identified in our volcano plots. Furthermore, in the case of enhancers a considerable number of matches were found compared to the original results, and many were associated with the same gene, such as MTHFR or MACF1.
+To confirm the first observed difference, we decided to create a barplot comparable to that in Figure 2A by selecting only data points with FDR < 0.05, which is the preset metric for statistical significance in limma [8], referred to as adj. P. Value (Figure 2).
+
+![*Figure 2: Barplot comparison of differentially enriched regulatory regions.*](C:/Users/gianl/Desktop/ETH/BiologyMsc/Spring Semester Material/BARGE/Project/data/barplot1_comp.png)
+\
+We identified around 30 times more differentially enriched enhancers compared to the original publication in both NeuN+ and NeuN- samples, while for promoters the increase is even greater at around 50 times. This means that a huge amount of regions were extracted from the processed data. We suppose that the explanation behind this enormous difference might primarily depend on the generation of the BigWig files. Most importantly, whether they were generated before or after filtering for low-enrichment peaks. To investigate this hypothesis, we decided to visualise the tracks of bigwig files using the epiwraps function plotSignalTracks from 2 BigWig files. If the files were generated before filtering one would expect a very noisy track. The resulting plotted tracks (Figure 3) clearly shows a noisy region with many low coverage peaks. Furthermore, some regions even have negative scores, which we have not encountered before.
+
+![*Figure3: Signal Tracks for two H3K4me3 samples, untreated and treated. 100kb region displayed: chr1:68000000-68100000*](C:/Users/gianl/Desktop/ETH/BiologyMsc/Spring Semester Material/BARGE/Project/data/track_plot.png)
+\
+In conclusion, we state that the inflation of differentially enriched regulatory elements was caused by BigWig files containing noisy data. This led to most, if not all, regulatory regions investigated during signal extraction to present a signal, resulting in summarized experiment files containing an enormous number of peaks. This most likely impacted all the subsequent downstream analysis by contributing to the very low p values.
+Another aspect that might have influenced the statistical significance of certain peaks is that in their pipeline, the authors regressed sex, age at death, antemortem diagnosis and PMD variables. However, this information was not present in the processed data, hence they were still contributing to our linear model.
+Even though we realised that the initial data required a filtering step that we were not able to carry out, we decided to continue with further analysis and attempt to carry out an enrichment analysis. In Figure 3A of the paper the authors used an integrative method called EpiSig to combine epigenomic (H3K27ac and H3K4me3 histone marks) and transcriptomic data. They first identified genomic regions enriched for epigenomic signals and clustered them into 814 epigenetically similar groups. These were subsequently grouped into six broader clusters using the K-means clustering method. Due to the unavailability of the EpiSig tool in our setting, we adapted the clustering strategy slightly. Specifically, we performed two separate clustering analyses: one focused on enhancers and the other on promoters.
+
+![*Figure 4: Left: Original publication heatmap showing the signal in each EpiSig cluster. Top Right: Heatmap for promotors: The heatmap shows the signal in each of the 6 different cluster. Bottom Right: Heatmap for enhancers: The heatmap shows the signal in each of the 6 different cluster.* ](C:/Users/gianl/Desktop/ETH/BiologyMsc/Spring Semester Material/BARGE/Project/data/heatmap_comp.png)
+\
+In the two heatmaps we can see several differences between the control and schizophrenic groups in all clusters. There are clusters with very active regions (red) in some groups and less active regions (blue) in other groups. The authors functionally characterized the six epigenomic sections from 3A and related them to schizophrenia. This functionally characterization was made through e.g. the CpG annotation or the genomic annotations. Since these results are based on the EpiSig clusters, which we did not use in our analysis, it was not possible for us to replicate this figure. To further analyse our two heatmaps from above we decided to do two Enrichment analyses for two specific clusters (one of the promoters heatmap and one of the enhancers heatmap). We specifically looked for clusters, which had a high signal (red) in the schizophrenic patients and a low signal (blue) in the control group. Which means the genomic region annotated to this cluster is very active in schizophrenic patients and inactive in healthy controls, which would give us possible insights in the epigenetic changes in schizophrenic patients. Based on this approach we chose the cluster 3 for promoters and the cluster 4 for enhancers to conduct an Enrichment Analysis with. In cluster 3 for promoters we can observe a big difference in the signal in NeuN+ cells between schizophrenic patients and control. In cluster 4 for enhancers, the difference in signal is seen in NeuN- cells. With these two Enrichment analyses we hope to gain insight in the possible epigenetic changes in schizophrenia. After we had split the regions and set the background, we conducted the actual Enrichment analysis for both clusters.
+ 
+![*Figure 5: Left: Enrichment Analysis for Enhancers Cluster 4 Right: Enrichment Analysis for Promotors Cluster 3*](C:/Users/gianl/Desktop/ETH/BiologyMsc/Spring Semester Material/BARGE/Project/data/GOs.png)
+\
+On the left we see the analysis for enhancer cluster 4 identifies enrichment in processes such as protein localization to the plasma membrane, receptor recycling, protein import into the peroxisome matrix, vesicle docking and organelle transport. These processes are connected to synaptic function and neurotransmitter signalling, both of which are crucial for normal brain functioning. Dysregulation of these pathways has been linked to various neuropsychiatric conditions, including schizophrenia [1].
+Similarly, in the one on the right, which is for the cluster 3 of the promoters we can see an enrichment in genes annotated to biological processes involved in neural tube formation and closure, cell-matrix adhesion and cytoskeletal organization. These pathways are relevant to early neurodevelopment and disruptions in such processes have been implicated in the pathophysiology of schizophrenia [1]. 
+
+
+
+
+# Code
+```{r setup}
+knitr::opts_knit$set(root.dir = "C:/Users/gianl/Desktop/ETH/BiologyMsc/Spring Semester Material/BARGE/Project/data")
+```
+## Summarised Experiment Files
+
+```{r}
+suppressPackageStartupMessages({
+  library(rtracklayer)
+  library(GenomicRanges)
+  library(AnnotationHub)
+  library(SummarizedExperiment)
+  library(tidyverse)
+})
+
+```
+
+### Promoters
+
+```{r}
+# Set directory and list files for parsing
+bw_files <- list.files("./GSE174407_RAW" ,pattern = "\\.bw$", full.names = TRUE)
+bw_files_pro <- bw_files[grep(bw_files, pattern = "*_H3K4me3_*")]
+
+pro_files <- as.character(bw_files_pro)
+pro_filenames <- basename(pro_files)
+pro_filenames <- as.character(pro_filenames)
+```                       
+
+```{r}
+# Get promoter regions from ENCODE
+
+ah <- AnnotationHub()
+query_result <- query(ah, c("ENCODE", "promoter", "Homo sapiens", "hg38", "Gencode"))
+query_result
+
+promoters_gr <- ah[["AH116729"]]
+```
+
+```{r}
+# Store metadata promoter
+
+sample_id <- str_extract(pro_filenames, "GSM\\d+")
+
+condition <- case_when(
+  str_detect(pro_filenames, "_SCZ_") ~ "SCZ",
+  str_detect(pro_filenames, "_Control_") ~ "Control",
+  TRUE ~ NA_character_
+)
+
+sample_number <- pro_filenames %>%
+  str_extract("_(SCZ|Control)_\\d+") %>%
+  str_extract("\\d+") %>%
+  as.integer()
+
+treatment_status <- case_when(
+  str_detect(pro_filenames, "untreated") ~ "untreated",
+  str_detect(pro_filenames, "treated") ~ "treated",
+  TRUE ~ NA_character_
+)
+
+cell_marker <- str_extract(pro_filenames, "NeuN[+-]")
+histone_mark <- str_extract(pro_filenames, "H3K4me3")
+replicate <- str_extract(pro_filenames, "R[12]")
+
+# Combine into tibble
+metadata_promoter <- tibble(
+  file = pro_files,
+  filename = pro_filenames,
+  sample_id = sample_id,
+  condition = condition,
+  sample_number = sample_number,
+  treatment_status = treatment_status,
+  cell_marker = cell_marker,
+  histone_mark = histone_mark,
+  replicate = replicate
+)
+
+
+print(metadata_promoter)
+```
+
+This is the code that we tried to apply using with signal2Matrix epiwraps function
+
+sample_ids <- str_extract(basename(bw_files_pro), "GSM\\d+")
+
+names(bw_files_pro) <- sample_ids
+
+stopifnot(!any(is.na(names(bw_files_pro))))
+
+se_promoter <- epiwraps::signal2Matrix(
+  filepaths =  bw_files_pro,
+  regions = promoters_gr
+)
+
+colData(se_promoter) <- DataFrame(metadata_promoter)
+
+saveRDS(se_promoter, file = "sumExp_promoter.rds")
+
+```{r}
+# quantification function
+quantify_bw <- function(bw_file, regions){
+  cov <- import(bw_file, which = regions, as = "NumericList")
+  sapply(cov, mean, na.rm = TRUE)
+}
+
+# create matrix
+count_matrix_promoter <- matrix(NA, nrow = length(promoters_gr), ncol = nrow(metadata_promoter))
+rownames(count_matrix_promoter) <- paste0(seqnames(promoters_gr), ":", start(promoters_gr), "-", end(promoters_gr))
+colnames(count_matrix_promoter) <- metadata_promoter$sample_id
+
+# fill matrix
+for (i in seq_len(nrow(metadata_promoter))){
+  cat("Processing:", metadata_promoter$file[i], "\n")
+  count_matrix_promoter[, i] <- quantify_bw(metadata_promoter$file[i], promoters_gr)
+}
+
+any(rowSums(count_matrix_promoter[]) == 0) # No rows are equal zero, so all promoter regions present some signal.
+any(is.na(count_matrix_promoter)) # No NAs
+
+se <- SummarizedExperiment(
+  assays = list(signal = count_matrix_promoter),
+  rowRanges = promoters_gr,
+  colData = as.data.frame(metadata_promoter)
+)
+
+saveRDS(se, file = "sumExp_promoter.rds")
+```
+
+### Enhancers
+
+```{r}
+# Select enhancer regions
+
+query_result2 <- query(ah, c("ENCODE", "enhancer", "Homo sapiens", "hg38", "Gencode"))
+query_result2
+
+enhancers_gr <- ah[["AH116728"]]
+```
+
+
+```{r}
+# Prepare list for parsing
+
+bw_files_enh <- bw_files[grep(bw_files, pattern = "*_H3K27ac_*")]
+
+enh_files <- as.character(bw_files_enh)
+enh_filenames <- basename(enh_files)
+enh_filenames <- as.character(enh_filenames)
+```
+
+
+```{r}
+# Store metadata enhancers
+
+sample_id_e <- str_extract(enh_filenames, pattern = "GSM\\d+")
+
+condition_e <- case_when(
+  str_detect(enh_filenames ,"_SCZ_") ~ "SCZ",
+  str_detect(enh_filenames, "_Control_") ~ "Control",
+  TRUE ~ NA_character_
+)
+
+sample_number_e <- enh_filenames %>%
+  str_extract("_(SCZ|Control)_\\d+") %>%
+  str_extract("\\d+") %>%
+  as.integer()
+
+treatment_status_e <- case_when(
+  str_detect(enh_filenames, "untreated") ~ "untreated",
+  str_detect(enh_filenames, "treated") ~ "treated",
+  TRUE ~ NA_character_
+)
+
+cell_marker_e <- str_extract(enh_filenames, "NeuN[+-]")
+histone_mark_e <- str_extract(enh_filenames, "H3K27ac")
+replicate_e <- str_detect(enh_filenames, "R[12]")
+
+metadata_enhancer <- tibble(
+  file = enh_files,
+  filename = enh_filenames,
+  sample_id = sample_id_e,
+  condition = condition_e,
+  sample_number = sample_number_e,
+  treatment_status = treatment_status_e,
+  cell_marker = cell_marker_e,
+  histone_mark = histone_mark_e,
+  replicate = replicate_e
+)
+
+print(metadata_enhancer)
+```
+
+Attempt with signal2Matrix
+
+sample_ids_e <- str_extract(basename(bw_files_enh), "GSM\\d+")
+
+names(bw_files_enh) <- sample_ids_e
+
+stopifnot(!any(is.na(names(bw_files_enh))))
+
+We also attempted to split regions into chunks so that the memory will not be occupied all at once, but it was not sufficient and it would still lead to an error.
+
+gr_chunks <- split(enhancers_gr, ceiling(seq_along(enhancers_gr) / 10000))
+
+se_list <- vector("list", length(gr_chunks))
+
+for (i in seq_along(gr_chunks)) {
+  message("Processing chunk ", i)
+  se_list[[i]] <- epiwraps::signal2Matrix(
+    filepaths = bw_files_enh,
+    regions = gr_chunks[[i]]
+    SerialParam()
+    )
+}
+
+se_e <- readRDS("SumExp_Enh.rds")
+
+```{r}
+# Enhancer signal quantification from BW, SummarizedExperiment and export
+
+# create matrix
+count_matrix_enhancer <- matrix(NA, nrow = length(enhancers_gr), ncol = nrow(metadata_enhancer))
+rownames(count_matrix_enhancer) <- paste0(seqnames(enhancers_gr), ":", start(enhancers_gr), "-", end(enhancers_gr))
+colnames(count_matrix_enhancer) <- metadata_enhancer$sample_id
+
+# See if any of the selected enhancers overlap with promoters as they did in the paper
+hits <- findOverlaps(enhancers_gr, promoters_gr) 
+hits # No overlaps
+
+# loop thorugh bigwig files to fill matrix with count
+for (i in seq_len(nrow(metadata_enhancer))){
+  cat("Processing:", metadata_enhancer$file[i], "\n")
+  count_matrix_enhancer[,i] <- quantify_bw(metadata_enhancer$file[i], enhancers_gr)
+}
+
+any(rowSums(count_matrix_enhancer[]) == 0) # some rows are equal zero
+any(is.na(count_matrix_enhancer)) # No NAs
+
+# Remove rows where sum is zero
+filtered_matrix_enhancer <- count_matrix_enhancer[rowSums(count_matrix_enhancer[])>0,]
+
+filtered_enhancers_gr <-enhancers_gr[rowSums(count_matrix_enhancer[])>0]
+
+any(rowSums(filtered_matrix_enhancer[]) == 0) # no more rows with all zero values
+
+# generate a SummarizedExperiment
+enh_se <- SummarizedExperiment(
+  assays = list(signal = filtered_matrix_enhancer),
+  rowRanges = filtered_enhancers_gr,
+  colData = as.data.frame(metadata_enhancer)
+)
+
+saveRDS(enh_se, file = "sumExp_Enh.rds")
+```
+
+## Regulatory Elements Annotation
+```{r}
+suppressPackageStartupMessages({
+  library(GenomicRanges)
+  library(AnnotationHub)
+})
+```
+
+```{r}
+# Promoter Associated genes
+se_p <- readRDS("sumExp_promoter.rds")
+
+promoters_gr <- rowRanges(se_p)
+
+# authors used gencode annotation v29 on hg38
+ah <- AnnotationHub()
+q <- query(ah, c("gencode", "gene", "GRCh38"))
+genes <- ah[["AH75174"]]
+
+tss_genes <- resize(genes, width = 1, fix = "start")
+tss_region <- promoters(tss_genes, upstream = 500)
+
+# Check genome metadata
+genome(promoters_gr) # empty
+genome(genes)
+
+genome(promoters_gr) <- genome(genes)
+
+hits <- findOverlaps(promoters_gr, tss_region)
+prom_index <- queryHits(hits)
+gene_names <- mcols(genes)$Gene[subjectHits(hits)]
+
+# Collapse gene names for promoters with multiple hits
+collapsed_names <- tapply(gene_names, prom_index, function(x) paste(unique(x), collapse = ";"))
+
+# Convert to a full-length character vector
+all_gene_names <- rep(NA_character_, length(promoters_gr)) # create vector
+all_gene_names[as.integer(names(collapsed_names))] <- collapsed_names # fill vector
+
+# Add column for gene names to Summarised Experiment
+
+rowData(se_p)$gene <- all_gene_names
+
+head(rowData(se_p)$gene)
+
+# save SE
+saveRDS(se_p, "SumExp_pro_with_genes.rds")
+``` 
+
+```{r}
+# Enhancer associated genes
+se_e <- readRDS("sumExp_Enh.rds")
+
+enhancer_gr <- rowRanges(se_e)
+
+enh_regions <- resize(enhancer_gr, width = width(enhancer_gr)+ 2000, fix = "center")
+
+# Make sure that my regions and the genes have the same metadata again
+genome(enh_regions) <- genome(genes)
+
+# Find overlapping genes
+hits_enh <- findOverlaps(enh_regions, genes)
+enh_index <- queryHits(hits_enh)
+enh_gene_names <- mcols(genes)$Gene[subjectHits(hits_enh)]
+
+collapsed_enh_names <- tapply(enh_gene_names, enh_index, function(x) paste(unique(x), collapse = ";"))
+
+all_gene_names2 <- rep(NA_character_, length(enhancer_gr))
+all_gene_names2[as.integer(names(collapsed_enh_names))] <- collapsed_enh_names 
+
+rowData(se_e)$gene <- all_gene_names2
+
+head(rowData(se_e)$gene)
+
+# Save results
+saveRDS(se_e, "SumExp_enh_with_genes.rds")
+```
+
+## Differential Analysis¨
+### Promoters
+```{r}
+suppressPackageStartupMessages({
+  library(limma)
+  library(SummarizedExperiment)
+  library(ggplot2)
+  library(ggrepel)
+})
+```
+
+```{r}
+se_p <- readRDS("SumExp_pro_with_genes.rds")
+```
+
+```{r}
+# Differential analysis NeuN+
+
+# Separate NeuN+ and NeuN- and also control
+
+metadata <- colData(se_p)
+metadata$cell_marker <- factor(metadata$cell_marker)
+metadata$treatment_status <- factor(metadata$treatment_status)
+
+# Filter NeuN+ and SCZ
+idx_neun_pos_scz_unt <- which(
+  metadata$cell_marker == "NeuN+" &
+  metadata$condition == "SCZ"
+)
+
+# Filter NeuN+ Control samples
+idx_neun_pos_control <- which(
+  metadata$cell_marker == "NeuN+" &
+  metadata$condition == "Control"
+)
+
+se_neun_pos_combined <- se_p[, c(idx_neun_pos_scz_unt, idx_neun_pos_control)]
+
+# Diff Analysis
+
+# Trasform in log for limma
+log_matrix_pos <- log2(assay(se_neun_pos_combined)+1)
+
+# compare SCZ against control
+md_pos <- colData(se_neun_pos_combined)
+
+md_pos$condition <- relevel(factor(md_pos$condition), "Control")
+
+mm_pos <- model.matrix(~ condition, data = md_pos)
+
+# linear model
+
+fit_pos <- limma::eBayes(limma::lmFit(object = log_matrix_pos, design = mm_pos))
+res_pos <- as.data.frame(limma::topTable(fit_pos, coef = "conditionSCZ", number = Inf))
+
+saveRDS(res_pos,"DF_DA_pro_NeuN+.rds")
+
+ggplot(res_pos, aes(logFC, -log10(adj.P.Val)))+geom_point()
+```
+
+```{r}
+# Differential Analysis NeuN-
+
+# Filter NeuN- and SCZ 
+idx_neun_neg_scz_unt <- which(
+  metadata$cell_marker == "NeuN-" &
+  metadata$condition == "SCZ"
+)
+
+# Filter NeuN+ Control samples
+idx_neun_neg_control <- which(
+  metadata$cell_marker == "NeuN-" &
+  metadata$condition == "Control"
+)
+
+se_neun_neg_combined <- se_p[, c(idx_neun_neg_scz_unt, idx_neun_neg_control)]
+
+# Diff Analysis
+
+# Trasform in log for limma
+log_matrix_neg <- log2(assay(se_neun_neg_combined)+1)
+
+# compare SCZ against control
+md_neg <- colData(se_neun_neg_combined)
+
+md_neg$condition <- relevel(factor(md_neg$condition), "Control")
+
+mm_neg <- model.matrix(~ condition, data = md_neg)
+
+# linear model
+
+fit_neg <- limma::eBayes(limma::lmFit(object = log_matrix_neg, design = mm_neg))
+res_neg <- as.data.frame(limma::topTable(fit_neg, coef = "conditionSCZ", number = Inf))
+
+saveRDS(res_neg, "DF_DA_pro_NeuN-.rds")
+
+ggplot(res_neg, aes(logFC, -log10(adj.P.Val)))+geom_point()
+```
+
+
+```{r}
+# Volcano plots with matching genes
+
+# This is the list of genes provided by the authors in their github page
+candidate_SCZ_genes = c('AKT1','APOE',"BDNF","CHRNA7","COMT","DAO","DAOA","DISC1","DRD2","DRD3",
+                    "DRD4","DTNBP1","GRM3","HTR2A","KCNN3","MTHFR","NOTCH4","NRG1","PPP3CC,PRODH",
+                    "RGS4","SLC6A3","SLC6A4","TNF","ZDHHC8","CTNND2","NRXN3","PTPRR","SLIT2","ANK3",
+                    "APP","PTK2","FYN","ROBO1","PLPPR4","GRIK2","CDK5R1","GRIA2","GRID2","GRIN3A",
+                    "GRIN2B","GRIN2A","GRIA3","GRIA4","TIAM1","GRIA1","GRIN1","CLN3","GRID1","CPEB4",
+                    "PTK2B","MEF2C","MUSK","PPP1R9A","NRXN1","TPBG","LRRTM3","ROBO2","DAG1","FA2H",
+                    "DICER1","NTRK2","SH3TC2","NDRG1","ARHGEF10","POU3F2","SOD1","ILK","CDK5","CPLX2",
+                    "SNCA","SLC30A1","NLGN1","P2RY1","SYT1","CNR1","CACNB2","PRKCB","EBF1","CHD9",
+                    "PCK1","DRD5","TCEB2","CHRNA2","CHRNA6","FGF17","SOX9","GSN","PLP1","CD9",
+                    "BOK","ASPA","SOX8","OLIG2","OLIG1","KCNJ10","CNP","SOX13","MYRF","GRM5",
+                    "GRM7","GRM8","EGR3","NTNG2","DVL2","DLG4","MACF1","FZD4",'SHANK3','VIPR2',
+                    'SLC1A1','RBM12',"APOL2","SCZD12","CHI3L1","DISC2","SYN2","SCZD1","SCZD3","SCZD5",
+                    "SCZD6","SCZD11","SCZD2","SCZD7","SCZD8","RTN4R","APOL4",'G72','PRODH2','ZDHHC8',
+                    'TAAR6','NOS1AP','TPH1','AHI1','RELN','TRKA','ZNF804','TCF','NRGRN','BCL9','NRGN',
+                    'TCF4','ARVCF','CNNM2','CACNA1C')
+
+
+res_pos$gene <- rowData(se_neun_pos_combined)$gene
+
+res_neg$gene <- rowData(se_neun_neg_combined)$gene
+
+head(res_pos$gene)
+
+logFC_thresh <- 0.25
+pval_thresh <- 0.05
+
+
+# NeuN+ Volcano Plot
+
+res_pos$significant <- res_pos$adj.P.Val < pval_thresh & abs(res_pos$logFC) > logFC_thresh # label significant points
+
+res_pos$scz_gene <- sapply(res_pos$gene, function(x){
+  if (is.na(x)) return(FALSE)
+  any(strsplit(x, ";")[[1]] %in% candidate_SCZ_genes)
+}) # label points that correspond to SCZ genes 
+
+res_pos$plot_col <- ifelse(!res_pos$significant, "not_significant",
+                           ifelse(res_pos$scz_gene, "scz_gene", "significant")) # create column with label information
+
+res_pos$plot_col <- factor(res_pos$plot_col, levels = c("not_significant", "significant", "scz_gene")) # set labels as factor
+
+base_points_pos <- subset(res_pos, !(scz_gene & significant))
+scz_points_pos <- subset(res_pos, scz_gene & significant)
+
+plot1 <- ggplot()+
+  geom_point(data = base_points_pos, aes(x= logFC, y = -log10(adj.P.Val), color = significant), alpha = 0.6)+
+  geom_point(data = scz_points_pos, aes(x= logFC, y = -log10(adj.P.Val)), color = "black", size = 2)+
+  scale_color_manual(values = c("TRUE" = "pink2", "FALSE" = "grey80"))+
+  geom_text_repel(
+    data = scz_points_pos,
+    aes(x = logFC, y = -log10(adj.P.Val), label = gene),
+    size = 4.5,
+    max.overlaps = 20)+
+  geom_vline(xintercept = c(-logFC_thresh, logFC_thresh), linetype = "dashed")+
+  geom_hline(yintercept = -log10(pval_thresh), linetype = "dashed")+
+  xlim(-2,2)+
+  ylim(0,120)+
+  theme(legend.position = "none")+
+  labs(
+    title = "Promoters NeuN+",
+    x = expression(log[2]*"(FC)"),
+    y = expression(-log[10]*"(adj.P.Val)"),
+    size = 1
+  )+
+  theme(
+    plot.title = element_text(size=14, face= "bold", colour= "black" ),
+    axis.title.x = element_text(size=16, face="bold", colour = "black"),    
+    axis.title.y = element_text(size=16, face="bold", colour = "black"),    
+    axis.text.x = element_text(size=12, face="bold", colour = "black"), 
+    axis.text.y = element_text(size=12, face="bold", colour = "black"), # bold
+    strip.text.x = element_text(size = 10, face="bold", colour = "black" ),
+    strip.text.y = element_text(size = 10, face="bold", colour = "black"),
+    panel.border = element_rect(colour = "black", fill=NA, size=0.3)
+  )
+
+print(plot1)
+
+ggsave("C:/Users/gianl/Desktop/ETH/BiologyMsc/Spring Semester Material/BARGE/Project/data/DF_plot_pro_NeuNpos.png",
+       plot = plot1,
+       width = 11,
+       height = 8,
+       dpi = 150)
+```
+
+### Enhancers
+```{r}
+suppressPackageStartupMessages({
+  library(limma)
+  library(SummarizedExperiment)
+  library(ggplot2)
+  library(ggrepel)
+})
+```
+
+```{r}
+se_e <- readRDS("SumExp_enh_with_genes.rds")
+```
+
+```{r}
+# Differential Analysis NeuN+
+
+metadata <- colData(se_e)
+metadata$cell_marker <- factor(metadata$cell_marker)
+metadata$treatment_status <- factor(metadata$treatment_status)
+
+# Filter NeuN+ and SCZ untreated samples
+idx_enh_neun_pos_scz_unt <- which(
+  metadata$cell_marker == "NeuN+" &
+  metadata$condition == "SCZ"
+)
+
+# Filter NeuN+ Control samples
+idx_enh_neun_pos_control <- which(
+  metadata$cell_marker == "NeuN+" &
+  metadata$condition == "Control"
+)
+
+se_enh_neun_pos_combined <- se_e[, c(idx_enh_neun_pos_scz_unt, idx_enh_neun_pos_control)]
+
+# Diff Analysis
+
+log_enh_matrix_pos <- log2(assay(se_enh_neun_pos_combined)+1)
+
+md_enh_pos <- colData(se_enh_neun_pos_combined)
+
+md_enh_pos$condition <- relevel(factor(md_enh_pos$condition), "Control")
+
+mm_enh_pos <- model.matrix(~ condition, data = md_enh_pos)
+
+# linear model
+
+fit_enh_pos <- limma::eBayes(limma::lmFit(object = log_enh_matrix_pos, design = mm_enh_pos))
+res_enh_pos <- as.data.frame(limma::topTable(fit_enh_pos, coef = "conditionSCZ", number = Inf))
+
+saveRDS(res_enh_pos, "DF_DA_enh_NeuN+.rds")
+
+ggplot(res_enh_pos, aes(logFC, -log10(adj.P.Val)))+geom_point()
+```
+
+```{r}
+# Differential Analysis NeuN-
+
+# Filter NeuN- and SCZ untreated samples
+idx_enh_neun_neg_scz_unt <- which(
+  metadata$cell_marker == "NeuN-" &
+  metadata$condition == "SCZ"
+)
+
+# Filter NeuN- Control samples
+idx_enh_neun_neg_control <- which(
+  metadata$cell_marker == "NeuN-" &
+  metadata$condition == "Control"
+)
+
+se_enh_neun_neg_combined <- se_e[, c(idx_enh_neun_neg_scz_unt, idx_enh_neun_neg_control)]
+
+# Diff Anal
+
+log_enh_matrix_neg <- log2(assay(se_enh_neun_neg_combined)+1)
+
+md_enh_neg <- colData(se_enh_neun_neg_combined)
+
+md_enh_neg$condition <- relevel(factor(md_enh_neg$condition), "Control")
+
+mm_enh_neg <- model.matrix(~ condition, data = md_enh_neg)
+
+# linear model
+
+fit_enh_neg <- limma::eBayes(limma::lmFit(object = log_enh_matrix_neg, design = mm_enh_pos))
+res_enh_neg <- as.data.frame(limma::topTable(fit_enh_neg, coef = "conditionSCZ", number = Inf))
+
+saveRDS(res_enh_neg, "DF_DA_enh_NeuN-.rds")
+
+ggplot(res_enh_pos, aes(logFC, -log10(adj.P.Val)))+geom_point()
+```
+
+
+```{r}
+# Volcano Plot with matching gene names
+
+# This is the list of genes provided by the authors in their github page
+candidate_SCZ_genes = c('AKT1','APOE',"BDNF","CHRNA7","COMT","DAO","DAOA","DISC1","DRD2","DRD3",
+                    "DRD4","DTNBP1","GRM3","HTR2A","KCNN3","MTHFR","NOTCH4","NRG1","PPP3CC,PRODH",
+                    "RGS4","SLC6A3","SLC6A4","TNF","ZDHHC8","CTNND2","NRXN3","PTPRR","SLIT2","ANK3",
+                    "APP","PTK2","FYN","ROBO1","PLPPR4","GRIK2","CDK5R1","GRIA2","GRID2","GRIN3A",
+                    "GRIN2B","GRIN2A","GRIA3","GRIA4","TIAM1","GRIA1","GRIN1","CLN3","GRID1","CPEB4",
+                    "PTK2B","MEF2C","MUSK","PPP1R9A","NRXN1","TPBG","LRRTM3","ROBO2","DAG1","FA2H",
+                    "DICER1","NTRK2","SH3TC2","NDRG1","ARHGEF10","POU3F2","SOD1","ILK","CDK5","CPLX2",
+                    "SNCA","SLC30A1","NLGN1","P2RY1","SYT1","CNR1","CACNB2","PRKCB","EBF1","CHD9",
+                    "PCK1","DRD5","TCEB2","CHRNA2","CHRNA6","FGF17","SOX9","GSN","PLP1","CD9",
+                    "BOK","ASPA","SOX8","OLIG2","OLIG1","KCNJ10","CNP","SOX13","MYRF","GRM5",
+                    "GRM7","GRM8","EGR3","NTNG2","DVL2","DLG4","MACF1","FZD4",'SHANK3','VIPR2',
+                    'SLC1A1','RBM12',"APOL2","SCZD12","CHI3L1","DISC2","SYN2","SCZD1","SCZD3","SCZD5",
+                    "SCZD6","SCZD11","SCZD2","SCZD7","SCZD8","RTN4R","APOL4",'G72','PRODH2','ZDHHC8',
+                    'TAAR6','NOS1AP','TPH1','AHI1','RELN','TRKA','ZNF804','TCF','NRGRN','BCL9','NRGN',
+                    'TCF4','ARVCF','CNNM2','CACNA1C')
+
+
+res_enh_pos$gene <- rowData(se_enh_neun_pos_combined)$gene
+
+res_enh_neg$gene <- rowData(se_enh_neun_neg_combined)$gene
+
+
+logFC_thresh <- 0.25
+pval_thresh <- 0.05
+
+
+# NeuN+ Volcano Plot
+
+res_enh_pos$significant <- res_enh_pos$adj.P.Val < pval_thresh & abs(res_enh_pos$logFC) > logFC_thresh # label significant points
+
+res_enh_pos$scz_gene <- sapply(res_enh_pos$gene, function(x){
+  if (is.na(x)) return(FALSE)
+  any(strsplit(x, ";")[[1]] %in% candidate_SCZ_genes)
+}) # label points that correspond to SCZ genes 
+
+res_enh_pos$plot_col <- ifelse(!res_enh_pos$significant, "not_significant",
+                           ifelse(res_enh_pos$scz_gene, "scz_gene", "significant")) # create column with label information
+
+res_enh_pos$plot_col <- factor(res_enh_pos$plot_col, levels = c("not_significant", "significant", "scz_gene")) # set labels as factor
+
+base_points_pos <- subset(res_enh_pos, !(scz_gene & significant))
+scz_points_pos <- subset(res_enh_pos, scz_gene & significant)
+
+plot1 <- ggplot()+
+  geom_point(data = base_points_pos, aes(x= logFC, y = -log10(adj.P.Val), color = significant), alpha = 0.6)+
+  geom_point(data = scz_points_pos, aes(x= logFC, y = -log10(adj.P.Val)), color = "black", size = 2)+
+  scale_color_manual(values = c("TRUE" = "green3", "FALSE" = "grey80"))+
+  geom_text_repel(
+    data = scz_points_pos,
+    aes(x = logFC, y = -log10(adj.P.Val), label = gene),
+    size = 4.5,
+    max.overlaps = 20)+
+  geom_vline(xintercept = c(-logFC_thresh, logFC_thresh), linetype = "dashed")+
+  geom_hline(yintercept = -log10(pval_thresh), linetype = "dashed")+
+  xlim(-2,2)+
+  ylim(0,70)+
+  theme(legend.position = "none")+
+  labs(
+    title = "Enhancers NeuN+", 
+    x = expression(log[2]*"(FC)"), 
+    y = expression(-log[10]*"(adj.P.Val)")
+    )+
+  theme(
+    plot.title = element_text(size=14, face= "bold", colour= "black" ),
+    axis.title.x = element_text(size=16, face="bold", colour = "black"),    
+    axis.title.y = element_text(size=16, face="bold", colour = "black"),    
+    axis.text.x = element_text(size=12, face="bold", colour = "black"), 
+    axis.text.y = element_text(size=12, face="bold", colour = "black"), # bold
+    strip.text.x = element_text(size = 10, face="bold", colour = "black" ),
+    strip.text.y = element_text(size = 10, face="bold", colour = "black"),
+    panel.border = element_rect(colour = "black", fill=NA, size=0.3)
+  )
+
+print(plot1)
+
+ggsave("C:/Users/gianl/Desktop/ETH/BiologyMsc/Spring Semester Material/BARGE/Project/data/DF_plot_enh_Neupos.png",
+       plot = plot1,
+       width = 11,
+       height = 8,
+       dpi = 150)
+       
+      
+# NeuN- Volcano Plot
+
+res_enh_neg$significant <- res_enh_neg$adj.P.Val < pval_thresh & abs(res_enh_neg$logFC) > logFC_thresh
+
+res_enh_neg$scz_gene <- sapply(res_enh_neg$gene, function(x){
+  if (is.na(x)) return(FALSE)
+  any(strsplit(x, ";")[[1]] %in% candidate_SCZ_genes)
+})
+
+res_enh_neg$plot_col <- ifelse(!res_enh_neg$significant, "not_significant",
+                           ifelse(res_enh_neg$scz_gene, "scz_gene", "significant"))
+
+res_enh_neg$plot_col <- factor(res_enh_neg$plot_col, levels = c("not_significant", "significant", "scz_gene"))
+
+base_points_neg <- subset(res_enh_neg, !(scz_gene & significant))
+scz_points_neg <- subset(res_enh_neg, scz_gene & significant)
+
+plot2 <- ggplot()+
+  geom_point(data = base_points_neg, aes(x = logFC, y = -log10(adj.P.Val), color = significant), alpha = 0.6)+
+  geom_point(data = scz_points_neg, aes(x = logFC, y = -log10(adj.P.Val)), color = "black", size = 2)+
+  scale_color_manual(values = c("TRUE" = "green3", "FALSE" = "grey80")
+  )+
+  geom_text_repel(
+    data = scz_points_neg,
+    aes(x = logFC, y =-log10(adj.P.Val), label = gene),
+    size = 4.5,
+    max.overlaps = 20)+
+  geom_vline(xintercept = c(-logFC_thresh, logFC_thresh), linetype = "dashed")+
+  geom_hline(yintercept = -log10(pval_thresh), linetype = "dashed")+
+  xlim(-2, 2)+
+  ylim(0,70)+
+  theme(legend.position = "none")+
+  labs(
+    title = "Enhancers NeuN-",
+    x = expression(log[2]*"(FC)"), 
+    y = expression(-log[10]*"(adj.P.Val)")
+    )+
+  theme(
+    plot.title = element_text(size=14, face= "bold", colour= "black" ),
+    axis.title.x = element_text(size=16, face="bold", colour = "black"),    
+    axis.title.y = element_text(size=16, face="bold", colour = "black"),    
+    axis.text.x = element_text(size=12, face="bold", colour = "black"), 
+    axis.text.y = element_text(size=12, face="bold", colour = "black"), # bold
+    strip.text.x = element_text(size = 10, face="bold", colour = "black" ),
+    strip.text.y = element_text(size = 10, face="bold", colour = "black"),
+    panel.border = element_rect(colour = "black", fill=NA, size=0.3)
+  )
+
+
+print(plot2)
+
+ggsave("C:/Users/gianl/Desktop/ETH/BiologyMsc/Spring Semester Material/BARGE/Project/data/DF_plot_enh_NeuNneg.png",
+       plot = plot2,
+       width = 11,
+       height = 8,
+       dpi = 150)
+```
+
+## Barplot
+```{r}
+suppressPackageStartupMessages({
+  library(ggplot2)
+})
+```
+
+```{r}
+# Import DFs of differential analysis
+
+res_pro_pos <- readRDS("DF_DA_pro_NeuN+.rds")
+res_pro_neg <- readRDS("DF_DA_pro_NeuN-.rds")
+
+res_enh_pos <- readRDS("DF_DA_enh_NeuN+.rds")
+res_enh_neg <- readRDS("DF_DA_enh_NeuN-.rds")
+```
+
+```{r}
+# Select Differential Promoters/Enhancers
+# authors used an FDR, preset as significance metric in limma, of 0.05.
+
+sig_threshold <- 0.05
+
+sig_pro_pos <- res_pro_pos[res_pro_pos$adj.P.Val < sig_threshold, ]
+sig_pro_neg <- res_pro_neg[res_pro_neg$adj.P.Val < sig_threshold, ]
+
+sig_enh_pos <- res_enh_pos[res_enh_pos$adj.P.Val < sig_threshold, ]
+sig_enh_neg <- res_enh_neg[res_enh_neg$adj.P.Val < sig_threshold, ]
+
+# dataframe with counts for each group
+
+df_sig_elements <- data.frame(
+  Category = rep(c("Enhancers", "Promoters"), each = 2),
+  CellType = rep(c("NeuN+", "NeuN-"), 2),
+  Count = c(
+    nrow(sig_enh_pos),
+    nrow(sig_enh_neg),
+    nrow(sig_pro_pos),
+    nrow(sig_pro_neg)
+  )
+)
+```
+
+
+```{r}
+# barplot
+
+barplot <- ggplot(df_sig_elements, aes(x = Category, y = Count, fill = CellType))+
+  geom_bar(stat = "identity", position = position_dodge(width = 0.6), width = 0.6)+
+  geom_text(aes(label = Count),
+            position = position_dodge(width = 0.6),
+            vjust = -0.5, size = 4)+
+  scale_fill_manual(values = c("NeuN-" = "blue","NeuN+" = "red"))+
+  labs(
+    title = "Number of Differential Peaks",
+    x = "Regulatory Element",
+    y = "Differential Peaks",
+    fill = "Cell Marker"
+  )+
+   theme(
+    plot.title = element_text(size=14, face= "bold", colour= "black" ),
+    axis.title.x = element_text(size=16, face="bold", colour = "black"),    
+    axis.title.y = element_text(size=16, face="bold", colour = "black"),    
+    axis.text.x = element_text(size=12, face="bold", colour = "black"), 
+    axis.text.y = element_text(size=12, face="bold", colour = "black"), # bold
+    strip.text.x = element_text(size = 10, face="bold", colour = "black" ),
+    strip.text.y = element_text(size = 10, face="bold", colour = "black"),
+  )
+
+print(barplot)
+
+ggsave("C:/Users/gianl/Desktop/ETH/BiologyMsc/Spring Semester Material/BARGE/Project/data/barplot_DF.png",
+       plot = barplot,
+       width = 10,
+       height = 10,
+       dpi = 150
+       )
+```
+
+## Visualising Tracks
+```{r}
+suppressPackageStartupMessages({
+  library(epiwraps)
+  library(GenomicRanges)
+  library(ggplot2)
+})
+```
+
+```{r}
+# define region
+region <- GRanges("chr1", IRanges(start=68000000, end=68100000))
+
+base_path <- "C:/Users/gianl/Desktop/ETH/BiologyMsc/Spring Semester Material/BARGE/Project/data/GSE174407_RAW"
+
+tracks <- list(
+  H3K4me3_NeuNpos_untreated = file.path(base_path, "GSM5296610_SCZ_1_untreated_NeuN+_H3K4me3_R1.bw"),
+  H3K4me3_NeuNpos_treated   = file.path(base_path, "GSM5296657_SCZ_16_treated_NeuN+_H3K4me3_R1.bw")
+)
+
+# Plot signal tracks
+
+png("track_plot.png", width = 1200, height = 800)
+p <- epiwraps::plotSignalTracks(
+  files = tracks,
+  region = region,
+  return_plot = TRUE
+)
+dev.off()
+```
+## Clustering and Enrichment Analysis
+```{r}
+suppressPackageStartupMessages({
+  library(GenomicRanges)
+  library(epiwraps)
+  library(ggplot2)
+  library(rGREAT)
+  library(SummarizedExperiment)
+  library(ComplexHeatmap)
+  library(viridis)
+})
+```
+
+```{r}
+pro <- readRDS("SumExp_pro_with_genes.rds")
+enh <- readRDS("SumExp_enh_with_genes.rds")
+```
+
+```{r}
+# Produce matrix for promotors and enhancers with measured signals
+
+pro_signals <- assay(pro)
+enh_signals  <- assay(enh)
+
+# Set rownames of matrices
+
+rownames(pro_signals) <- rownames(pro)
+rownames(enh_signals)  <- rownames(enh)
+
+```
+
+```{r}
+# Extracting condition and sample annotations for grouping
+
+meta_pro <- as.data.frame(colData(pro))
+meta_enh  <- as.data.frame(colData(enh))
+
+```
+
+```{r}
+# Define grouping variable based on cell type, histone mark and condition (8 groups)
+
+# For promotors
+
+meta_pro$Group <- paste(meta_pro$cell_marker, meta_pro$histone_mark, meta_pro$condition, sep = "_")
+
+# For enhancers
+
+meta_enh$Group <- paste(meta_enh$cell_marker, meta_enh$histone_mark, meta_enh$condition, sep = "_")
+
+
+
+table(meta_pro$Group)
+table(meta_enh$Group)
+
+```
+
+```{r}
+# Create a matrix mapping samples to groups
+
+# For promotors
+
+groups_pro <- model.matrix(~ 0 + meta_pro$Group)
+colnames(groups_pro) <- gsub("meta_pro\\$Group", "", colnames(groups_pro))
+rownames(groups_pro) <- meta_pro$sample_id
+
+head(groups_pro)
+
+# For enhancers
+
+groups_enh <- model.matrix(~ 0 + meta_enh$Group)
+colnames(groups_enh) <- gsub("meta_enh\\$Group", "", colnames(groups_enh))
+rownames(groups_enh) <- meta_enh$sample_id
+
+head(groups_enh)
+
+```
+
+```{r}
+# Calculate mean signal per group
+
+# For promotors
+
+pro_signals <- pro_signals[, rownames(groups_pro)]
+pro_signals <- as.matrix(pro_signals)
+groups_pro <- as.matrix(groups_pro)
+
+# For enhancers
+
+enh_signals <- enh_signals[, rownames(groups_enh)]
+enh_signals <- as.matrix(enh_signals)
+groups_enh <- as.matrix(groups_enh)
+
+
+
+# Sum in group
+
+group_sums_pro <- pro_signals %*% groups_pro
+
+group_sums_enh <- enh_signals %*% groups_enh
+
+
+
+# Divide per amount of samples to get mean signal 
+
+group_means_pro <- sweep(group_sums_pro, 2, colSums(groups_pro), "/")
+
+group_means_enh <- sweep(group_sums_enh, 2, colSums(groups_enh), "/")
+
+
+
+```
+
+```{r}
+# Normalizing scores
+
+z_scores_pro <- t(scale(t(group_means_pro)))
+
+z_scores_enh <- t(scale(t(group_means_enh)))
+
+```
+
+```{r}
+# Use smaller region for heatmap 
+
+row_var_pro <- apply(z_scores_pro, 1, var)
+row_var_enh <- apply(z_scores_enh, 1, var)
+
+# Use the top 100 most variable regions
+
+top_regions_pro <- order(row_var_pro, decreasing = TRUE)[1:1000]
+top_regions_enh <- order(row_var_enh, decreasing = TRUE)[1:1000]
+
+# Subset of matrix
+
+z_scores_subset_pro <- z_scores_pro[top_regions_pro, ]
+z_scores_subset_enh <- z_scores_enh[top_regions_enh, ]
+
+# Clustering
+
+set.seed(123)
+pro_clusters <- kmeans(z_scores_subset_pro, centers = 6)$cluster
+
+set.seed(123)
+enh_clusters <- kmeans(z_scores_subset_enh, centers = 6)$cluster
+
+# Save labels 
+
+rowData(pro)$cluster <- NA  
+rowData(pro)[rownames(z_scores_subset_pro), "cluster"] <- pro_clusters
+
+rowData(enh)$cluster <- NA  
+rowData(enh)[rownames(z_scores_subset_enh), "cluster"] <- enh_clusters
+
+# Heatmap for promotors and enhancers
+
+Heatmap(
+  z_scores_subset_pro,
+  name = "Promotor Z-score",
+  cluster_columns = FALSE,
+  show_row_names = FALSE,
+  row_split = as.factor(pro_clusters),
+  column_names_rot = 45
+)
+
+Heatmap(
+  z_scores_subset_enh,
+  name = "Enhancer Z-score",
+  cluster_columns = FALSE,
+  show_row_names = FALSE,
+  row_split = as.factor(enh_clusters),
+  column_names_rot = 45
+)
+
+```
+
+```{r}
+# Further analysis: Enrichment analysis
+# Split regions
+
+# For promotors
+
+split_pro_regions <- split(rowRanges(pro), rowData(pro)$cluster)
+
+# For enhancers
+
+split_enh_regions <- split(rowRanges(enh), rowData(enh)$cluster)
+
+```
+
+```{r}
+#Set background
+
+# For promotors
+
+background_pro <- rowRanges(pro)
+
+# For enhancers
+
+background_enh <- rowRanges(enh)
+
+```
+
+```{r}
+# Enrichment analysis for one specific cluster 
+
+# For promotors: cluster 3
+
+res_pro3 <- great(
+  split_pro_regions[["3"]],
+  gene_sets = "GO:BP",
+  tss_source = "hg38",         
+  background = background_pro,
+  cores = 1
+)
+
+bp_pro3 <- getEnrichmentTables(res_pro3)
+head(bp_pro3)
+
+# For enhancers: cluster 4
+
+res_enh4 <- great(
+  split_enh_regions[["4"]],
+  gene_sets = "GO:BP",
+  tss_source = "hg38",         
+  background = background_enh,
+  cores = 1
+)
+
+bp_enh4 <- getEnrichmentTables(res_enh4)
+head(bp_enh4)
+
+```
+
+
+```{r}
+# Visualising results
+
+# For promotors
+
+GO1 <- ggplot(head(bp_pro3, 15), aes(fold_enrichment, reorder(description, p_adjust), 
+                              size = observed_region_hits, 
+                              color = -log10(p_adjust))) + 
+  geom_point() + 
+  scale_color_viridis_c() +
+  theme_minimal() +
+  labs(y = "GO Term", x = "Fold Enrichment", title = "GO:BP Enrichment - Promotor Cluster 3")
+
+
+# For enhancers
+
+GO2 <- ggplot(head(bp_enh4, 15), aes(fold_enrichment, reorder(description, p_adjust), 
+                              size = observed_region_hits, 
+                              color = -log10(p_adjust))) + 
+  geom_point() + 
+  scale_color_viridis_c() +
+  theme_minimal() +
+  labs(y = "GO Term", x = "Fold Enrichment", title = "GO:BP Enrichment - Enhancer Cluster 4")
+
+ggsave("C:/Users/gianl/Desktop/ETH/BiologyMsc/Spring Semester Material/BARGE/Project/data/GO1.png",
+       plot = GO1,
+       width = 11,
+       height = 8,
+       dpi = 150)
+
+ggsave("C:/Users/gianl/Desktop/ETH/BiologyMsc/Spring Semester Material/BARGE/Project/data/GO2.png",
+       plot = GO2,
+       width = 11,
+       height = 8,
+       dpi = 150)
+```
+
+
+
+
+
+
+
+
+# References
+
+1 - Zhu, B., Ainsworth, R. I., Wang, Z., Liu, Z., Sierra, S., Deng, C., Callado, L. F., Meana, J. J., Wang, W., Lu, C., & González-Maeso, J. (2024). Antipsychotic-induced epigenomic reorganization in frontal cortex of individuals with schizophrenia. eLife, 12, RP92393. https://doi.org/10.7554/eLife.92393
+
+2 - Akira Sawa, Solomon H. Snyder ,Schizophrenia: Diverse Approaches to a Complex Disease.Science296,692-695(2002).DOI:10.1126/science.1070532
+
+3 - Schizophrenia Working Group of the Psychiatric Genomics Consortium. 2014. Biological insights from 108 schizophrenia-associated genetic loci. Nature 511:421–427. DOI: https://doi.org/10.1038/nature13595, PMID: 25056061
+
+4 - Heritability of Schizophrenia and Schizophrenia Spectrum Based on the Nationwide Danish Twin Register. Hilker, Rikke et al. Biological Psychiatry, Volume 83, Issue 6, 492 - 498
+
+5 - Jaffe AE, Gao Y, Deep-Soboslay A, Tao R, Hyde TM, Weinberger DR, Kleinman JE. 2016. Mapping DNA methylation across development, genotype and schizophrenia in the human frontal cortex. Nature Neuroscience 19:40–47. DOI: https://doi.org/10.1038/nn.4181, PMID: 26619358
+
+6 - https://genome.ucsc.edu/cgi-bin/hgTrackUi?db=hg38&g=encodeCcreCombined
+
+7- Mauro de Medeiros Oliveira, Igor Bonadio, Alicia Lie de Melo, Glaucia Mendes Souza, Alan Mitchell Durham, TSSFinder—fast and accurate ab initio prediction of the core promoter in eukaryotic genomes, Briefings in Bioinformatics, Volume 22, Issue 6, November 2021, bbab198, https://doi.org/10.1093/bib/bbab198¨
+
+8 - Ritchie, M.E., Phipson, B., Wu, D., Hu, Y., Law, C.W., Shi, W., and Smyth, G.K. (2015). limma powers differential expression analyses for RNA-sequencing and microarray studies. Nucleic Acids Research, 43 (7), e47. 
+
+# Disclosure
+AI tools (ChatGPT) were used for troubleshooting and generating code sections not seen during lectures taken by the group participants. Additionally, bioinformatic forums were also queried to develop code.
